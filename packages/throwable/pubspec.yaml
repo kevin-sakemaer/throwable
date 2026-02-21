@@ -1,0 +1,12 @@
+name: throwable
+description: A lightweight package for declaring checked exceptions in Dart.
+version: 1.0.0-alpha.1
+repository: https://github.com/kevin-sakemaer/throwable
+
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  meta: ^1.10.0
