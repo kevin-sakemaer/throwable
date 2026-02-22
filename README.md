@@ -29,6 +29,10 @@ plugins:
     git:
       url: https://github.com/kevin-sakemaer/throwable.git
       path: packages/throwable_lints
+    diagnostics:
+      unhandled_exception_call: true # warning/error
+      unhandled_throw_in_body: true # warning/error
+
 ```
 
 Annotate functions with `@Throws` to declare their exceptions:

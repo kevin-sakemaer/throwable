@@ -60,6 +60,7 @@ class _Visitor extends SimpleAstVisitor<void> {
     },
     'dart:convert': {
       'jsonDecode': ['FormatException'],
+      'JsonCodec.decode': ['FormatException'],
     },
   };
 
