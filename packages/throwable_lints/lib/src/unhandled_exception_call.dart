@@ -8,10 +8,10 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 
-class UnhandledExceptionCall extends AnalysisRule {
-  static const _code = LintCode(
+class UnhandledExceptionCall extends MultiAnalysisRule {
+  static const code = LintCode(
     'unhandled_exception_call',
-    'This call can throw exceptions that must be handled or declared in a @Throws annotation.',
+    "Unhandled '{0}' from call to '{1}'. Catch it or declare it with @Throws.",
   );
 
   UnhandledExceptionCall()
@@ -21,7 +21,7 @@ class UnhandledExceptionCall extends AnalysisRule {
       );
 
   @override
-  DiagnosticCode get diagnosticCode => _code;
+  List<DiagnosticCode> get diagnosticCodes => [code];
 
   @override
   void registerNodeProcessors(
@@ -108,7 +108,13 @@ class _Visitor extends SimpleAstVisitor<void> {
         if (_isDeclaredInEnclosing(node, exceptionType, context.typeSystem))
           continue;
 
-        rule.reportAtNode(node);
+        final exceptionName = exceptionType.getDisplayString();
+        final callName = _getMemberName(element);
+        rule.reportAtNode(
+          node,
+          diagnosticCode: UnhandledExceptionCall.code,
+          arguments: [exceptionName, callName],
+        );
       }
     }
   }

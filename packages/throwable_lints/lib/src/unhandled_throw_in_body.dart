@@ -8,10 +8,15 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 
-class UnhandledThrowInBody extends AnalysisRule {
-  static const _code = LintCode(
+class UnhandledThrowInBody extends MultiAnalysisRule {
+  static const codeThrow = LintCode(
     'unhandled_throw_in_body',
-    'This exception must be handled or declared in a @Throws annotation.',
+    "Unhandled throw of '{0}'. Catch it or declare it with @Throws.",
+  );
+
+  static const codeRethrow = LintCode(
+    'unhandled_throw_in_body',
+    "Unhandled rethrow of '{0}'. Declare it with @Throws.",
   );
 
   UnhandledThrowInBody()
@@ -22,7 +27,7 @@ class UnhandledThrowInBody extends AnalysisRule {
       );
 
   @override
-  DiagnosticCode get diagnosticCode => _code;
+  List<DiagnosticCode> get diagnosticCodes => [codeThrow, codeRethrow];
 
   @override
   void registerNodeProcessors(
@@ -51,7 +56,12 @@ class _Visitor extends SimpleAstVisitor<void> {
     if (_isHandledLocally(node, type, context.typeSystem)) return;
     if (_isDeclaredInAnnotation(node, type, context.typeSystem)) return;
 
-    rule.reportAtNode(node);
+    final typeName = type.getDisplayString();
+    rule.reportAtNode(
+      node,
+      diagnosticCode: UnhandledThrowInBody.codeThrow,
+      arguments: [typeName],
+    );
   }
 
   @override
@@ -64,7 +74,12 @@ class _Visitor extends SimpleAstVisitor<void> {
 
     if (_isDeclaredInAnnotation(node, type, context.typeSystem)) return;
 
-    rule.reportAtNode(node);
+    final typeName = type.getDisplayString();
+    rule.reportAtNode(
+      node,
+      diagnosticCode: UnhandledThrowInBody.codeRethrow,
+      arguments: [typeName],
+    );
   }
 
   bool _isExceptionOrError(DartType type) {
