@@ -8,6 +8,9 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 
+import 'package:throwable_lints/src/utils/throws_utils.dart'
+    show getEnclosingExecutable, getDeclaredThrows;
+
 class UnhandledThrowInBody extends MultiAnalysisRule {
   static const codeThrow = LintCode(
     'unhandled_throw_in_body',
@@ -129,43 +132,13 @@ class _Visitor extends SimpleAstVisitor<void> {
     DartType thrownType,
     TypeSystem typeSystem,
   ) {
-    final executable = _getEnclosingExecutable(node);
+    final executable = getEnclosingExecutable(node);
     if (executable == null) return false;
 
-    for (final annotation in executable.metadata.annotations) {
-      final value = annotation.computeConstantValue();
-      final type = value?.type;
-      if (type is InterfaceType &&
-          type.element.name == 'Throws' &&
-          type.element.library.uri.toString().contains(
-            'package:throwable/throwable.dart',
-          )) {
-        final typesList = value?.getField('types')?.toListValue();
-        if (typesList != null) {
-          for (final typeObject in typesList) {
-            final declaredType = typeObject.toTypeValue();
-            if (declaredType != null &&
-                typeSystem.isSubtypeOf(thrownType, declaredType)) {
-              return true;
-            }
-          }
-        }
-      }
+    final declaredTypes = getDeclaredThrows(executable);
+    for (final declaredType in declaredTypes) {
+      if (typeSystem.isSubtypeOf(thrownType, declaredType)) return true;
     }
     return false;
-  }
-
-  Element? _getEnclosingExecutable(AstNode node) {
-    AstNode? current = node.parent;
-    while (current != null) {
-      if (current is FunctionDeclaration)
-        return current.declaredFragment?.element;
-      if (current is MethodDeclaration)
-        return current.declaredFragment?.element;
-      if (current is ConstructorDeclaration)
-        return current.declaredFragment?.element;
-      current = current.parent;
-    }
-    return null;
   }
 }
