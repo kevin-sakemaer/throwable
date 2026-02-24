@@ -1,9 +1,9 @@
-name: _
+name: throwable_workspace
 
 publish_to: none
 
 environment:
-  sdk: ^3.11.0
+  sdk: ^3.10.0
 
 workspace:
   - packages/throwable

@@ -19,5 +19,6 @@ class Throws {
   /// The types of exceptions or errors that can be thrown.
   final List<Type> types;
 
+  /// Creates a [Throws] annotation with the given exception [types].
   const Throws(this.types);
 }

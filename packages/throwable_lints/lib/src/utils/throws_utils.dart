@@ -1,9 +1,11 @@
+import 'package:analyzer/analysis_rule/rule_context.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
-import 'package:analyzer/analysis_rule/rule_context.dart';
+// ignore: implementation_imports, no public API for IgnoreInfo.
 import 'package:analyzer/src/ignore_comments/ignore_info.dart';
 
+/// Map of known SDK members to the exceptions they throw.
 const sdkThrowers = {
   'dart:core': {
     'Iterable.first': ['StateError'],
@@ -20,8 +22,9 @@ const sdkThrowers = {
   },
 };
 
+/// Extracts declared exception types from `@Throws` annotations on [element].
 List<DartType> getDeclaredThrows(ExecutableElement element) {
-  final List<DartType> result = [];
+  final result = <DartType>[];
   for (final annotation in element.metadata.annotations) {
     final value = annotation.computeConstantValue();
     if (value == null) continue;
@@ -44,6 +47,7 @@ List<DartType> getDeclaredThrows(ExecutableElement element) {
   return result;
 }
 
+/// Returns declared `@Throws` types, falling back to SDK-mapped throws.
 List<DartType> getEffectiveThrows(ExecutableElement element) {
   final declared = getDeclaredThrows(element);
   if (declared.isNotEmpty) return declared;
@@ -54,6 +58,7 @@ List<DartType> getEffectiveThrows(ExecutableElement element) {
   return const [];
 }
 
+/// Returns exception types mapped from [sdkThrowers] for [element].
 List<DartType> getSdkMappedThrows(ExecutableElement element) {
   final libraryUri = element.library.uri.toString();
   if (!sdkThrowers.containsKey(libraryUri)) return const [];
@@ -72,6 +77,7 @@ List<DartType> getSdkMappedThrows(ExecutableElement element) {
   return const [];
 }
 
+/// Returns the qualified member name (e.g. `ClassName.methodName`).
 String getMemberName(ExecutableElement element) {
   final enclosing = element.enclosingElement;
   final name = element.name ?? '';
@@ -81,6 +87,7 @@ String getMemberName(ExecutableElement element) {
   return name;
 }
 
+/// Looks up a [DartType] by [name] in [library] and its imports/exports.
 DartType? lookupType(String name, LibraryElement library) {
   final element = library.exportNamespace.get2(name);
   if (element is ClassElement) return element.thisType;
@@ -100,8 +107,9 @@ DartType? lookupType(String name, LibraryElement library) {
   return null;
 }
 
+/// Resolves the [ExecutableElement]s invoked by [node].
 List<ExecutableElement> resolveThrowingElements(Expression node) {
-  final List<ExecutableElement> result = [];
+  final result = <ExecutableElement>[];
 
   if (node is MethodInvocation) {
     final element = node.methodName.element;
@@ -128,22 +136,27 @@ List<ExecutableElement> resolveThrowingElements(Expression node) {
   return result;
 }
 
+/// Returns the nearest enclosing [ExecutableElement] for [node].
 ExecutableElement? getEnclosingExecutable(AstNode node) {
-  AstNode? current = node.parent;
+  var current = node.parent;
   while (current != null) {
-    if (current is FunctionDeclaration)
+    if (current is FunctionDeclaration) {
       return current.declaredFragment?.element;
-    if (current is MethodDeclaration)
+    }
+    if (current is MethodDeclaration) {
       return current.declaredFragment?.element;
-    if (current is ConstructorDeclaration)
+    }
+    if (current is ConstructorDeclaration) {
       return current.declaredFragment?.element;
+    }
     current = current.parent;
   }
   return null;
 }
 
+/// Returns the nearest enclosing declaration [AstNode] for [node].
 AstNode? getEnclosingDeclaration(AstNode node) {
-  AstNode? current = node.parent;
+  var current = node.parent;
   while (current != null) {
     if (current is FunctionDeclaration) return current;
     if (current is MethodDeclaration) return current;
@@ -153,15 +166,16 @@ AstNode? getEnclosingDeclaration(AstNode node) {
   return null;
 }
 
-/// Helper that caches [IgnoreInfo] per compilation unit and checks
-/// whether a diagnostic code is suppressed via `// ignore:` or
-/// `// ignore_for_file:` comments.
+/// Caches [IgnoreInfo] per compilation unit and checks whether a diagnostic
+/// code is suppressed via `// ignore:` or `// ignore_for_file:` comments.
 class IgnoreChecker {
   final RuleContext _context;
   IgnoreInfo? _ignoreInfo;
 
+  /// Creates an [IgnoreChecker] for the given [RuleContext].
   IgnoreChecker(this._context);
 
+  /// Returns `true` if [codeName] is ignored at [node]'s location.
   bool isIgnored(AstNode node, String codeName) {
     final info = _getIgnoreInfo();
     if (info == null || !info.hasIgnores) return false;
@@ -189,8 +203,7 @@ class IgnoreChecker {
     if (_ignoreInfo != null) return _ignoreInfo;
     final unit = _context.currentUnit;
     if (unit == null) return null;
-    _ignoreInfo = IgnoreInfo.forDart(unit.unit, unit.content);
-    return _ignoreInfo;
+    return _ignoreInfo = IgnoreInfo.forDart(unit.unit, unit.content);
   }
 
   static bool _matchesCode(IgnoredElement element, String codeName) =>

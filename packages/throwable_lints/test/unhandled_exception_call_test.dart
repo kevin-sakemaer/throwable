@@ -1,3 +1,5 @@
+// ignore_for_file: non_constant_identifier_names, test_reflective_loader need method to start with test_
+
 import 'package:analyzer_testing/analysis_rule/analysis_rule.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
 import 'package:throwable_lints/src/unhandled_exception_call.dart';
@@ -13,8 +15,7 @@ class UnhandledExceptionCallTest extends AnalysisRuleTest {
   @override
   void setUp() {
     rule = UnhandledExceptionCall();
-    newPackage('throwable')
-      ..addFile('lib/throwable.dart', r'''
+    newPackage('throwable').addFile('lib/throwable.dart', '''
 class Throws {
   final List<Type> types;
   const Throws(this.types);
@@ -24,7 +25,8 @@ class Throws {
   }
 
   Future<void> test_callUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -35,13 +37,13 @@ void dangerous() {}
 void f() {
   dangerous();
 }
-''', [
-      lint(144, 11),
-    ]);
+''',
+      [lint(144, 11)],
+    );
   }
 
   Future<void> test_callPropagatedViaAnnotation() async {
-    await assertNoDiagnostics(r'''
+    await assertNoDiagnostics('''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -57,7 +59,7 @@ void f() {
   }
 
   Future<void> test_callHandledInTryCatch() async {
-    await assertNoDiagnostics(r'''
+    await assertNoDiagnostics('''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -74,7 +76,7 @@ void f() {
   }
 
   Future<void> test_callHandledGenericCatch() async {
-    await assertNoDiagnostics(r'''
+    await assertNoDiagnostics('''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -91,7 +93,8 @@ void f() {
   }
 
   Future<void> test_getterUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -104,13 +107,14 @@ class Service {
 void f(Service s) {
   s.value;
 }
-''', [
-      lint(175, 7),
-    ]);
+''',
+      [lint(175, 7)],
+    );
   }
 
   Future<void> test_setterUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -123,13 +127,14 @@ class Service {
 void f(Service s) {
   s.value = 1;
 }
-''', [
-      lint(175, 11),
-    ]);
+''',
+      [lint(175, 11)],
+    );
   }
 
   Future<void> test_abstractMethodUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -142,23 +147,25 @@ abstract class Base {
 void f(Base b) {
   b.run();
 }
-''', [
-      lint(170, 7),
-    ]);
+''',
+      [lint(170, 7)],
+    );
   }
 
   Future<void> test_sdkThrowerUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 void f() {
   int.parse('x');
 }
-''', [
-      lint(13, 14),
-    ]);
+''',
+      [lint(13, 14)],
+    );
   }
 
   Future<void> test_operatorUnhandled() async {
-    await assertDiagnostics(r'''
+    await assertDiagnostics(
+      '''
 import 'package:throwable/throwable.dart';
 
 class MyException implements Exception {}
@@ -171,8 +178,8 @@ class MyList {
 void f(MyList l) {
   l[0];
 }
-''', [
-      lint(186, 4),
-    ]);
+''',
+      [lint(186, 4)],
+    );
   }
 }

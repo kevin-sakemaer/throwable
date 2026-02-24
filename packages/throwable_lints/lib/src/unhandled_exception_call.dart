@@ -1,26 +1,30 @@
+import 'package:analyzer/analysis_rule/analysis_rule.dart';
+import 'package:analyzer/analysis_rule/rule_context.dart';
+import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/dart/element/type_system.dart';
 import 'package:analyzer/error/error.dart';
-import 'package:analyzer/analysis_rule/analysis_rule.dart';
-import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
-import 'package:analyzer/analysis_rule/rule_context.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart'
     show
         IgnoreChecker,
         getEffectiveThrows,
-        getMemberName,
         getEnclosingExecutable,
+        getMemberName,
         resolveThrowingElements;
 
+/// Lint rule that detects unhandled exceptions from calls to `@Throws`
+/// annotated functions or known SDK throwers.
 class UnhandledExceptionCall extends MultiAnalysisRule {
+  /// Diagnostic code for unhandled exception calls.
   static const code = LintCode(
     'unhandled_exception_call',
     "Unhandled '{0}' from call to '{1}'. Catch it or declare it with @Throws.",
   );
 
+  /// Creates a new instance of [UnhandledExceptionCall].
   UnhandledExceptionCall()
     : super(
         name: 'unhandled_exception_call',
@@ -36,16 +40,17 @@ class UnhandledExceptionCall extends MultiAnalysisRule {
     RuleContext context,
   ) {
     final visitor = _Visitor(this, context);
-    registry.addMethodInvocation(this, visitor);
-    registry.addFunctionExpressionInvocation(this, visitor);
-    registry.addInstanceCreationExpression(this, visitor);
-    registry.addPropertyAccess(this, visitor);
-    registry.addPrefixedIdentifier(this, visitor);
-    registry.addIndexExpression(this, visitor);
-    registry.addBinaryExpression(this, visitor);
-    registry.addAssignmentExpression(this, visitor);
-    registry.addPrefixExpression(this, visitor);
-    registry.addPostfixExpression(this, visitor);
+    registry
+      ..addMethodInvocation(this, visitor)
+      ..addFunctionExpressionInvocation(this, visitor)
+      ..addInstanceCreationExpression(this, visitor)
+      ..addPropertyAccess(this, visitor)
+      ..addPrefixedIdentifier(this, visitor)
+      ..addIndexExpression(this, visitor)
+      ..addBinaryExpression(this, visitor)
+      ..addAssignmentExpression(this, visitor)
+      ..addPrefixExpression(this, visitor)
+      ..addPostfixExpression(this, visitor);
   }
 }
 
@@ -97,10 +102,12 @@ class _Visitor extends SimpleAstVisitor<void> {
       if (effectiveThrows.isEmpty) continue;
 
       for (final exceptionType in effectiveThrows) {
-        if (_isHandledLocally(node, exceptionType, context.typeSystem))
+        if (_isHandledLocally(node, exceptionType, context.typeSystem)) {
           continue;
-        if (_isDeclaredInEnclosing(node, exceptionType, context.typeSystem))
+        }
+        if (_isDeclaredInEnclosing(node, exceptionType, context.typeSystem)) {
           continue;
+        }
 
         final exceptionName = exceptionType.getDisplayString();
         final callName = getMemberName(element);
@@ -118,8 +125,8 @@ class _Visitor extends SimpleAstVisitor<void> {
     DartType exceptionType,
     TypeSystem typeSystem,
   ) {
-    AstNode? current = node.parent;
-    AstNode child = node;
+    var current = node.parent;
+    var child = node;
     while (current != null) {
       if (current is TryStatement) {
         if (current.body == child) {

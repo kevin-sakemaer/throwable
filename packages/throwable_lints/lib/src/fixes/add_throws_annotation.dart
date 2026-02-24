@@ -8,6 +8,7 @@ import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart';
 
+/// A correction producer that adds or appends exception types to `@Throws`.
 class AddThrowsAnnotation extends ResolvedCorrectionProducer {
   static const _fixKind = FixKind(
     'throwable.fix.addThrowsAnnotation',
@@ -15,6 +16,7 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     "Add '{0}' to @Throws annotation",
   );
 
+  /// Creates a new instance of [AddThrowsAnnotation].
   AddThrowsAnnotation({required super.context});
 
   @override
@@ -67,8 +69,8 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
 
   bool _isHandledOrDeclared(Expression callNode, DartType exceptionType) {
     // Check if handled in try-catch
-    AstNode? current = callNode.parent;
-    AstNode child = callNode;
+    var current = callNode.parent;
+    var child = callNode as AstNode;
     while (current != null) {
       if (current is TryStatement) {
         if (current.body == child) {
@@ -111,6 +113,7 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     final existingAnnotation = _findThrowsAnnotation(declaration);
 
     await builder.addDartFileEdit(file, (builder) {
+      // ignore: unhandled_exception_call, URI is a valid constant.
       builder.importLibrary(Uri.parse('package:throwable/throwable.dart'));
 
       if (existingAnnotation != null) {
@@ -159,6 +162,7 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     final arguments = annotation.arguments;
     if (arguments == null || arguments.arguments.isEmpty) return;
 
+    // ignore: unhandled_exception_call, list is guaranteed non-empty.
     final firstArg = arguments.arguments.first;
     if (firstArg is! ListLiteral) return;
 
@@ -168,6 +172,7 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
       builder.addSimpleInsertion(listLiteral.leftBracket.end, exceptionName);
     } else {
       // Non-empty list: @Throws([A]) -> @Throws([A, ExceptionType])
+      // ignore: unhandled_exception_call, list is guaranteed non-empty.
       final lastElement = listLiteral.elements.last;
       builder.addSimpleInsertion(lastElement.end, ', $exceptionName');
     }

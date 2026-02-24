@@ -7,6 +7,7 @@ import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart';
 
+/// A correction producer that wraps a statement in a try-catch block.
 class WrapInTryCatch extends ResolvedCorrectionProducer {
   static const _fixKind = FixKind(
     'throwable.fix.wrapInTryCatch',
@@ -14,6 +15,7 @@ class WrapInTryCatch extends ResolvedCorrectionProducer {
     "Wrap in try-catch for '{0}'",
   );
 
+  /// Creates a new instance of [WrapInTryCatch].
   WrapInTryCatch({required super.context});
 
   @override
@@ -34,7 +36,7 @@ class WrapInTryCatch extends ResolvedCorrectionProducer {
     final diagnosticNode = node;
     if (diagnosticNode is! Expression) return const [];
 
-    final List<DartType> unhandled = [];
+    final unhandled = <DartType>[];
     final elements = resolveThrowingElements(diagnosticNode);
     for (final element in elements) {
       final effectiveTypes = getEffectiveThrows(element);
@@ -48,8 +50,8 @@ class WrapInTryCatch extends ResolvedCorrectionProducer {
   }
 
   bool _isHandledOrDeclared(Expression callNode, DartType exceptionType) {
-    AstNode? current = callNode.parent;
-    AstNode child = callNode;
+    var current = callNode.parent;
+    var child = callNode as AstNode;
     while (current != null) {
       if (current is TryStatement) {
         if (current.body == child) {
@@ -99,16 +101,17 @@ class WrapInTryCatch extends ResolvedCorrectionProducer {
     );
 
     // Build the replacement
-    final buffer = StringBuffer();
-    buffer.write('try {\n');
-    buffer.write('$innerIndent$statementSource\n');
-    buffer.write('$indent}');
+    final buffer = StringBuffer()
+      ..write('try {\n')
+      ..write('$innerIndent$statementSource\n')
+      ..write('$indent}');
 
     for (final exceptionType in exceptionTypes) {
       final typeName = exceptionType.getDisplayString();
-      buffer.write(' on $typeName catch (e) {\n');
-      buffer.write('$innerIndent// TODO: Handle $typeName\n');
-      buffer.write('$indent}');
+      buffer
+        ..write(' on $typeName catch (e) {\n')
+        ..write('$innerIndent// TODO: Handle $typeName\n')
+        ..write('$indent}');
     }
 
     await builder.addDartFileEdit(file, (builder) {

@@ -1,27 +1,31 @@
+import 'package:analyzer/analysis_rule/analysis_rule.dart';
+import 'package:analyzer/analysis_rule/rule_context.dart';
+import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:analyzer/dart/element/type_system.dart';
 import 'package:analyzer/error/error.dart';
-import 'package:analyzer/analysis_rule/analysis_rule.dart';
-import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
-import 'package:analyzer/analysis_rule/rule_context.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart'
-    show IgnoreChecker, getEnclosingExecutable, getDeclaredThrows;
+    show IgnoreChecker, getDeclaredThrows, getEnclosingExecutable;
 
+/// Lint rule that enforces checked-exceptions for throw/rethrow expressions.
 class UnhandledThrowInBody extends MultiAnalysisRule {
+  /// Diagnostic code for unhandled `throw` expressions.
   static const codeThrow = LintCode(
     'unhandled_throw_in_body',
     "Unhandled throw of '{0}'. Catch it or declare it with @Throws.",
   );
 
+  /// Diagnostic code for unhandled `rethrow` expressions.
   static const codeRethrow = LintCode(
     'unhandled_throw_in_body',
     "Unhandled rethrow of '{0}'. Declare it with @Throws.",
   );
 
+  /// Creates a new instance of [UnhandledThrowInBody].
   UnhandledThrowInBody()
     : super(
         name: 'unhandled_throw_in_body',
@@ -38,8 +42,9 @@ class UnhandledThrowInBody extends MultiAnalysisRule {
     RuleContext context,
   ) {
     final visitor = _Visitor(this, context);
-    registry.addThrowExpression(this, visitor);
-    registry.addRethrowExpression(this, visitor);
+    registry
+      ..addThrowExpression(this, visitor)
+      ..addRethrowExpression(this, visitor);
   }
 }
 
@@ -113,8 +118,8 @@ class _Visitor extends SimpleAstVisitor<void> {
     DartType thrownType,
     TypeSystem typeSystem,
   ) {
-    AstNode? current = node.parent;
-    AstNode child = node;
+    var current = node.parent;
+    var child = node;
     while (current != null) {
       if (current is TryStatement) {
         if (current.body == child) {
