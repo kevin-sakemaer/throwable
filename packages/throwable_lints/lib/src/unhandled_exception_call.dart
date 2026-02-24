@@ -7,7 +7,13 @@ import 'package:analyzer/analysis_rule/analysis_rule.dart';
 import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 
-import 'package:throwable_lints/src/utils/throws_utils.dart';
+import 'package:throwable_lints/src/utils/throws_utils.dart'
+    show
+        IgnoreChecker,
+        getEffectiveThrows,
+        getMemberName,
+        getEnclosingExecutable,
+        resolveThrowingElements;
 
 class UnhandledExceptionCall extends MultiAnalysisRule {
   static const code = LintCode(
@@ -46,8 +52,9 @@ class UnhandledExceptionCall extends MultiAnalysisRule {
 class _Visitor extends SimpleAstVisitor<void> {
   final UnhandledExceptionCall rule;
   final RuleContext context;
+  final IgnoreChecker _ignoreChecker;
 
-  _Visitor(this.rule, this.context);
+  _Visitor(this.rule, this.context) : _ignoreChecker = IgnoreChecker(context);
 
   @override
   void visitMethodInvocation(MethodInvocation node) => _checkCall(node);
@@ -82,6 +89,8 @@ class _Visitor extends SimpleAstVisitor<void> {
   void visitPostfixExpression(PostfixExpression node) => _checkCall(node);
 
   void _checkCall(Expression node) {
+    if (_ignoreChecker.isIgnored(node, 'unhandled_exception_call')) return;
+
     final elements = resolveThrowingElements(node);
     for (final element in elements) {
       final effectiveThrows = getEffectiveThrows(element);

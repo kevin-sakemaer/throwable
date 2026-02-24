@@ -1,6 +1,8 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:analyzer/dart/element/type.dart';
+import 'package:analyzer/analysis_rule/rule_context.dart';
+import 'package:analyzer/src/ignore_comments/ignore_info.dart';
 
 const sdkThrowers = {
   'dart:core': {
@@ -149,4 +151,52 @@ AstNode? getEnclosingDeclaration(AstNode node) {
     current = current.parent;
   }
   return null;
+}
+
+/// Helper that caches [IgnoreInfo] per compilation unit and checks
+/// whether a diagnostic code is suppressed via `// ignore:` or
+/// `// ignore_for_file:` comments.
+class IgnoreChecker {
+  final RuleContext _context;
+  IgnoreInfo? _ignoreInfo;
+
+  IgnoreChecker(this._context);
+
+  bool isIgnored(AstNode node, String codeName) {
+    final info = _getIgnoreInfo();
+    if (info == null || !info.hasIgnores) return false;
+
+    // Check file-level ignores.
+    for (final element in info.ignoredForFile) {
+      if (_matchesCode(element, codeName)) return true;
+    }
+
+    // Check line-level ignores.
+    final unit = _context.currentUnit;
+    if (unit == null) return false;
+    final line = unit.unit.lineInfo.getLocation(node.offset).lineNumber;
+    final lineIgnores = info.ignoredOnLine[line];
+    if (lineIgnores != null) {
+      for (final element in lineIgnores) {
+        if (_matchesCode(element, codeName)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  IgnoreInfo? _getIgnoreInfo() {
+    if (_ignoreInfo != null) return _ignoreInfo;
+    final unit = _context.currentUnit;
+    if (unit == null) return null;
+    _ignoreInfo = IgnoreInfo.forDart(unit.unit, unit.content);
+    return _ignoreInfo;
+  }
+
+  static bool _matchesCode(IgnoredElement element, String codeName) =>
+      switch (element) {
+        IgnoredDiagnosticName(:final name) => name == codeName,
+        IgnoredDiagnosticType(:final type) => type == 'lint',
+        IgnoredDiagnosticComment() => false,
+      };
 }

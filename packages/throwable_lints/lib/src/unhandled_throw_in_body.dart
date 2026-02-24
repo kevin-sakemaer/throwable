@@ -9,7 +9,7 @@ import 'package:analyzer/analysis_rule/rule_visitor_registry.dart';
 import 'package:analyzer/analysis_rule/rule_context.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart'
-    show getEnclosingExecutable, getDeclaredThrows;
+    show IgnoreChecker, getEnclosingExecutable, getDeclaredThrows;
 
 class UnhandledThrowInBody extends MultiAnalysisRule {
   static const codeThrow = LintCode(
@@ -46,11 +46,14 @@ class UnhandledThrowInBody extends MultiAnalysisRule {
 class _Visitor extends SimpleAstVisitor<void> {
   final UnhandledThrowInBody rule;
   final RuleContext context;
+  final IgnoreChecker _ignoreChecker;
 
-  _Visitor(this.rule, this.context);
+  _Visitor(this.rule, this.context) : _ignoreChecker = IgnoreChecker(context);
 
   @override
   void visitThrowExpression(ThrowExpression node) {
+    if (_ignoreChecker.isIgnored(node, 'unhandled_throw_in_body')) return;
+
     final type = node.expression.staticType;
     if (type == null) return;
 
@@ -69,6 +72,8 @@ class _Visitor extends SimpleAstVisitor<void> {
 
   @override
   void visitRethrowExpression(RethrowExpression node) {
+    if (_ignoreChecker.isIgnored(node, 'unhandled_throw_in_body')) return;
+
     final catchClause = node.thisOrAncestorOfType<CatchClause>();
     if (catchClause == null) return;
 
