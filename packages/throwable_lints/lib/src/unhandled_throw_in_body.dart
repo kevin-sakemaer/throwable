@@ -33,9 +33,24 @@ class UnhandledThrowInBody extends MultiAnalysisRule {
             'Enforce checked-exceptions for throw and rethrow expressions.',
       );
 
+  /// Returns the list of diagnostic codes that this rule can produce.
+  ///
+  /// This rule produces two diagnostic codes:
+  /// - [codeThrow] for unhandled throw expressions
+  /// - [codeRethrow] for unhandled rethrow expressions
   @override
   List<DiagnosticCode> get diagnosticCodes => [codeThrow, codeRethrow];
 
+  /// Registers the AST node processors for this rule.
+  ///
+  /// This method registers a [_Visitor] instance to handle [ThrowExpression]
+  /// and [RethrowExpression] nodes. The visitor will check if these expressions
+  /// are properly handled or declared in the code.
+  ///
+  /// Parameters:
+  /// - [registry]: The registry to which node processors are added.
+  /// - [context]: The rule context providing access to type information
+  ///   and other analysis utilities.
   @override
   void registerNodeProcessors(
     RuleVisitorRegistry registry,
@@ -48,13 +63,41 @@ class UnhandledThrowInBody extends MultiAnalysisRule {
   }
 }
 
+/// Visitor class that checks for unhandled throw and rethrow expressions.
+///
+/// This visitor traverses the AST and identifies throw/rethrow expressions that
+/// are not properly handled or declared with @Throws annotations.
 class _Visitor extends SimpleAstVisitor<void> {
+  /// The rule instance that this visitor is associated with.
   final UnhandledThrowInBody rule;
+
+  /// The context providing access to type information and analysis utilities.
   final RuleContext context;
+
+  /// Helper for checking if a node should be ignored based on annotations.
   final IgnoreChecker _ignoreChecker;
 
+  /// Creates a new instance of [_Visitor].
+  ///
+  /// Parameters:
+  /// - [rule]: The rule instance that this visitor is associated with.
+  /// - [context]: The context providing access to type information
+  ///   and analysis utilities.
   _Visitor(this.rule, this.context) : _ignoreChecker = IgnoreChecker(context);
 
+  /// Visits a throw expression node to check if the thrown exception is
+  /// properly handled or declared.
+  ///
+  /// This method checks if:
+  /// - The node is ignored via annotations
+  /// - The thrown type is an Exception or Error
+  /// - The exception is handled locally in a try-catch block
+  /// - The exception is declared in a @Throws annotation
+  ///
+  /// If none of these conditions are met, a diagnostic is reported.
+  ///
+  /// Parameters:
+  /// - [node]: The throw expression node to analyze.
   @override
   void visitThrowExpression(ThrowExpression node) {
     if (_ignoreChecker.isIgnored(node, 'unhandled_throw_in_body')) return;
@@ -75,6 +118,18 @@ class _Visitor extends SimpleAstVisitor<void> {
     );
   }
 
+  /// Visits a rethrow expression node to check if the rethrown exception is
+  /// properly declared.
+  ///
+  /// This method checks if:
+  /// - The node is ignored via annotations
+  /// - The rethrow is within a catch clause
+  /// - The exception is declared in a @Throws annotation
+  ///
+  /// If the exception is not declared, a diagnostic is reported.
+  ///
+  /// Parameters:
+  /// - [node]: The rethrow expression node to analyze.
   @override
   void visitRethrowExpression(RethrowExpression node) {
     if (_ignoreChecker.isIgnored(node, 'unhandled_throw_in_body')) return;
@@ -95,6 +150,12 @@ class _Visitor extends SimpleAstVisitor<void> {
     );
   }
 
+  /// Checks if the given type is an Exception or Error type.
+  ///
+  /// Parameters:
+  /// - [type]: The Dart type to check.
+  ///
+  /// Returns: true if the type is an Exception or Error, false otherwise.
   bool _isExceptionOrError(DartType type) {
     final element = type.element;
     if (element is! ClassElement) return false;
@@ -113,6 +174,14 @@ class _Visitor extends SimpleAstVisitor<void> {
     return false;
   }
 
+  /// Checks if the thrown exception is handled locally in a try-catch block.
+  ///
+  /// Parameters:
+  /// - [node]: The AST node representing the throw expression.
+  /// - [thrownType]: The type of the thrown exception.
+  /// - [typeSystem]: The type system for subtype checking.
+  ///
+  /// Returns: true if the exception is handled locally, false otherwise.
   bool _isHandledLocally(
     AstNode node,
     DartType thrownType,
@@ -137,6 +206,15 @@ class _Visitor extends SimpleAstVisitor<void> {
     return false;
   }
 
+  /// Checks if the thrown exception is declared in a @Throws annotation.
+  ///
+  /// Parameters:
+  /// - [node]: The AST node representing the throw expression.
+  /// - [thrownType]: The type of the thrown exception.
+  /// - [typeSystem]: The type system for subtype checking.
+  ///
+  /// Returns true if the exception is declared in an annotation,
+  /// false otherwise.
   bool _isDeclaredInAnnotation(
     AstNode node,
     DartType thrownType,

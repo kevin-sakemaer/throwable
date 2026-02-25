@@ -1,4 +1,5 @@
-// ignore_for_file: non_constant_identifier_names, test_reflective_loader need method to start with test_
+// test_reflective_loader need method to start with test_
+// ignore_for_file: non_constant_identifier_names
 
 import 'package:analyzer_testing/analysis_rule/analysis_rule.dart';
 import 'package:test_reflective_loader/test_reflective_loader.dart';
