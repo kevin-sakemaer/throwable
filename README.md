@@ -15,10 +15,7 @@ Add `throwable` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  throwable:
-    git:
-      url: https://github.com/kevin-sakemaer/throwable.git
-      path: packages/throwable
+  throwable: ^1.0.0-alpha.2
 ```
 
 Enable the plugin in your `analysis_options.yaml`:
@@ -26,9 +23,7 @@ Enable the plugin in your `analysis_options.yaml`:
 ```yaml
 plugins:
   throwable_lints:
-    git:
-      url: https://github.com/kevin-sakemaer/throwable.git
-      path: packages/throwable_lints
+    path: path/to/throwable_lints
     diagnostics:
       unhandled_exception_call: true # warning/error
       unhandled_throw_in_body: true # warning/error

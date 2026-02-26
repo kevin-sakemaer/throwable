@@ -14,6 +14,8 @@ import 'package:throwable_lints/src/utils/throws_utils.dart'
         getEffectiveThrows,
         getEnclosingExecutable,
         getMemberName,
+        getParameterThrowsForCall,
+        getVariableThrowsForCall,
         resolveThrowingElements;
 
 /// Lint rule that detects unhandled exceptions from calls to `@Throws`
@@ -148,6 +150,7 @@ class _Visitor extends SimpleAstVisitor<void> {
   ///
   /// This method orchestrates the process of checking for unhandled exceptions
   /// by delegating to smaller, focused methods for each step of the process.
+  /// It also checks for `@Throws` annotations on function-typed parameters.
   void _checkCall(Expression node) {
     if (_ignoreChecker.isIgnored(node, 'unhandled_exception_call')) return;
 
@@ -155,6 +158,74 @@ class _Visitor extends SimpleAstVisitor<void> {
     for (final element in elements) {
       _processElementExceptions(node, element);
     }
+
+    _processParameterThrows(node);
+    _processVariableThrows(node);
+  }
+
+  /// Processes exceptions declared via `@Throws` on a function-typed
+  /// parameter.
+  ///
+  /// When a callback parameter like
+  /// `@Throws([MyException]) void Function()` is invoked, this checks each
+  /// declared exception type for proper handling.
+  /// Handles both [MethodInvocation] and [FunctionExpressionInvocation].
+  void _processParameterThrows(Expression node) {
+    final parameterThrows = getParameterThrowsForCall(node);
+    for (final exceptionType in parameterThrows) {
+      if (_isHandledLocally(node, exceptionType, context.typeSystem)) {
+        continue;
+      }
+      if (_isDeclaredInEnclosing(node, exceptionType, context.typeSystem)) {
+        continue;
+      }
+
+      final callName = _getParameterCallName(node);
+      final exceptionName = exceptionType.getDisplayString();
+      rule.reportAtNode(
+        node,
+        diagnosticCode: UnhandledExceptionCall.code,
+        arguments: [exceptionName, callName],
+      );
+    }
+  }
+
+  /// Processes exceptions declared via `@Throws` on a variable being invoked.
+  ///
+  /// When a `@Throws`-annotated variable like `_callback()` is invoked,
+  /// this checks each declared exception type for proper handling.
+  void _processVariableThrows(Expression node) {
+    final variableThrows = getVariableThrowsForCall(node);
+    for (final exceptionType in variableThrows) {
+      if (_isHandledLocally(node, exceptionType, context.typeSystem)) {
+        continue;
+      }
+      if (_isDeclaredInEnclosing(node, exceptionType, context.typeSystem)) {
+        continue;
+      }
+
+      final callName = _getParameterCallName(node);
+      final exceptionName = exceptionType.getDisplayString();
+      rule.reportAtNode(
+        node,
+        diagnosticCode: UnhandledExceptionCall.code,
+        arguments: [exceptionName, callName],
+      );
+    }
+  }
+
+  /// Extracts the parameter name from a call expression.
+  String _getParameterCallName(Expression node) {
+    if (node is MethodInvocation) {
+      return node.methodName.name;
+    }
+    if (node is FunctionExpressionInvocation) {
+      final function = node.function;
+      if (function is SimpleIdentifier) {
+        return function.name;
+      }
+    }
+    return '<callback>';
   }
 
   /// Processes all exceptions thrown by a single element.

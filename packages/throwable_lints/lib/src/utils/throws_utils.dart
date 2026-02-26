@@ -33,9 +33,25 @@ const sdkThrowers = {
 ///
 /// Returns an empty list if no `@Throws` annotations are found or if the
 /// annotation doesn't contain any valid exception types.
-List<DartType> getDeclaredThrows(ExecutableElement element) {
+List<DartType> getDeclaredThrows(ExecutableElement element) =>
+    _getDeclaredThrowsFromAnnotations(element.metadata.annotations);
+
+/// Extracts declared exception types from `@Throws` annotations on a
+/// [FormalParameterElement].
+///
+/// This is used when a function-typed parameter is annotated with `@Throws`
+/// to indicate that invoking the callback may throw certain exception types.
+List<DartType> getDeclaredThrowsFromParameter(
+  FormalParameterElement parameter,
+) => _getDeclaredThrowsFromAnnotations(parameter.metadata.annotations);
+
+/// Shared implementation that extracts `@Throws` exception types from a list
+/// of annotations.
+List<DartType> _getDeclaredThrowsFromAnnotations(
+  Iterable<ElementAnnotation> annotations,
+) {
   final result = <DartType>[];
-  for (final annotation in element.metadata.annotations) {
+  for (final annotation in annotations) {
     final value = annotation.computeConstantValue();
     if (value == null) continue;
 
@@ -309,6 +325,138 @@ List<ExecutableElement> _resolveMethodReference(
     return [element];
   }
   return [];
+}
+
+/// Extracts declared exception types from `@Throws` annotations on a
+/// [VariableElement] (field or top-level variable).
+List<DartType> getDeclaredThrowsFromVariable(VariableElement variable) =>
+    _getDeclaredThrowsFromAnnotations(variable.metadata.annotations);
+
+/// Returns exception types declared via `@Throws` on a variable being
+/// invoked in a call expression.
+///
+/// Handles both [MethodInvocation] (e.g. `_callback()`) and
+/// [FunctionExpressionInvocation] forms. Resolves the synthetic getter
+/// to the underlying variable and reads its `@Throws` annotation.
+List<DartType> getVariableThrowsForCall(Expression node) {
+  final resolved = _resolveCalleeElement(node);
+  if (resolved is! PropertyAccessorElement) return const [];
+
+  final variable = resolved.baseElement.variable;
+  final throws = getDeclaredThrowsFromVariable(variable);
+  return throws.isNotEmpty ? throws : const [];
+}
+
+/// Resolves the callee element from a call expression for variable lookup.
+Element? _resolveCalleeElement(Expression node) {
+  if (node is MethodInvocation) return node.methodName.element;
+  if (node is FunctionExpressionInvocation) {
+    final function = node.function;
+    if (function is SimpleIdentifier) return function.element;
+    if (function is PropertyAccess) return function.propertyName.element;
+  }
+  return null;
+}
+
+/// Extracts `@Throws` info from an expression used as an RHS in assignment.
+///
+/// Supports:
+/// - Parameter references (reads `@Throws` from the parameter)
+/// - Variable references (reads `@Throws` from the variable)
+/// - Function tear-offs (reads `@Throws` from the function element)
+List<DartType> getThrowsFromExpression(Expression expr) {
+  final Element? element;
+  if (expr is SimpleIdentifier) {
+    element = expr.element;
+  } else if (expr is PrefixedIdentifier) {
+    element = expr.identifier.element;
+  } else {
+    return const [];
+  }
+
+  if (element is FormalParameterElement) {
+    return getDeclaredThrowsFromParameter(element);
+  }
+  if (element is PropertyAccessorElement) {
+    final variable = element.baseElement.variable;
+    final throws = getDeclaredThrowsFromVariable(variable);
+    if (throws.isNotEmpty) return throws;
+  }
+  if (element is ExecutableElement) {
+    return getDeclaredThrows(element);
+  }
+  return const [];
+}
+
+/// Returns exception types declared via `@Throws` on a function-typed
+/// parameter being invoked in a call expression.
+///
+/// Handles both [MethodInvocation] (e.g. `callback()`) and
+/// [FunctionExpressionInvocation] forms.
+///
+/// For example, given:
+/// ```dart
+/// void f(@Throws([MyException]) void Function() callback) {
+///   callback();
+/// }
+/// ```
+///
+/// When processing `callback()`, this returns `[MyException]`.
+/// Returns an empty list if the callee is not a parameter or has no `@Throws`.
+List<DartType> getParameterThrowsForCall(Expression node) {
+  final Element? resolved;
+  if (node is MethodInvocation) {
+    resolved = node.methodName.element;
+  } else if (node is FunctionExpressionInvocation) {
+    final function = node.function;
+    resolved = function is SimpleIdentifier ? function.element : null;
+  } else {
+    return const [];
+  }
+
+  if (resolved is FormalParameterElement) {
+    return getDeclaredThrowsFromParameter(resolved);
+  }
+  return const [];
+}
+
+/// Returns `@Throws` types from the parameter a lambda is passed to.
+///
+/// When a `throw` is inside a lambda that is a direct argument to a
+/// function call, this finds the corresponding parameter and returns its
+/// declared `@Throws` types.
+///
+/// For example:
+/// ```dart
+/// void f(@Throws([MyException]) void Function() cb) { cb(); }
+/// f(() { throw MyException(); });
+/// //     ^^^^^^^^^^^^^^^^^^^^^ node is inside this lambda
+/// ```
+///
+/// Returns an empty list if the node is not inside a lambda argument or
+/// the corresponding parameter has no `@Throws`.
+List<DartType> getLambdaParameterThrows(AstNode node) {
+  final lambda = findEnclosingLambda(node);
+  if (lambda == null) return const [];
+
+  final param = lambda.correspondingParameter;
+  if (param == null) return const [];
+
+  return getDeclaredThrowsFromParameter(param);
+}
+
+/// Finds the nearest enclosing lambda that is a direct argument in a
+/// function call. Returns `null` if [node] is not inside such a lambda.
+FunctionExpression? findEnclosingLambda(AstNode node) {
+  var current = node.parent;
+  while (current != null) {
+    if (current is FunctionExpression &&
+        current.parent is! FunctionDeclaration) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
 }
 
 /// Returns the nearest enclosing [ExecutableElement] for the given [node].

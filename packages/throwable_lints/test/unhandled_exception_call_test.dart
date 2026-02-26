@@ -164,6 +164,152 @@ void f() {
     );
   }
 
+  Future<void> test_parameterCallbackUnhandled() async {
+    await assertDiagnostics(
+      '''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+void f(@Throws([MyException]) void Function() callback) {
+  callback();
+}
+''',
+      [lint(147, 10)],
+    );
+  }
+
+  Future<void> test_parameterCallbackHandledInTryCatch() async {
+    await assertNoDiagnostics('''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+void f(@Throws([MyException]) void Function() callback) {
+  try {
+    callback();
+  } on MyException catch (_) {}
+}
+''');
+  }
+
+  Future<void> test_parameterCallbackPropagated() async {
+    await assertNoDiagnostics('''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+@Throws([MyException])
+void f(@Throws([MyException]) void Function() callback) {
+  callback();
+}
+''');
+  }
+
+  Future<void> test_parameterCallbackNoAnnotation() async {
+    await assertNoDiagnostics('''
+void f(void Function() callback) {
+  callback();
+}
+''');
+  }
+
+  Future<void> test_namedParameterCallbackUnhandled() async {
+    await assertDiagnostics(
+      '''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+void f({@Throws([MyException]) required void Function() onError}) {
+  onError();
+}
+''',
+      [lint(157, 9)],
+    );
+  }
+
+  Future<void> test_topLevelVariableWithThrowsUnhandled() async {
+    await assertDiagnostics(
+      '''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+@Throws([MyException])
+late void Function() _callback;
+
+void f() {
+  _callback();
+}
+''',
+      [lint(156, 11)],
+    );
+  }
+
+  Future<void> test_topLevelVariableWithThrowsHandledInTryCatch() async {
+    await assertNoDiagnostics('''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+@Throws([MyException])
+late void Function() _callback;
+
+void f() {
+  try {
+    _callback();
+  } on MyException catch (_) {}
+}
+''');
+  }
+
+  Future<void> test_topLevelVariableWithThrowsPropagated() async {
+    await assertNoDiagnostics('''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+@Throws([MyException])
+late void Function() _callback;
+
+@Throws([MyException])
+void f() {
+  _callback();
+}
+''');
+  }
+
+  Future<void> test_fieldWithThrowsUnhandled() async {
+    await assertDiagnostics(
+      '''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+class Service {
+  @Throws([MyException])
+  late void Function() onError;
+}
+
+void f(Service s) {
+  s.onError();
+}
+''',
+      [lint(185, 11)],
+    );
+  }
+
+  Future<void> test_variableWithoutThrowsNoLint() async {
+    await assertNoDiagnostics('''
+late void Function() _callback;
+
+void f() {
+  _callback();
+}
+''');
+  }
+
   Future<void> test_operatorUnhandled() async {
     await assertDiagnostics(
       '''

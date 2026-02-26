@@ -3,6 +3,7 @@ import 'package:analysis_server_plugin/registry.dart';
 
 import 'package:throwable_lints/src/fixes/add_throws_annotation.dart';
 import 'package:throwable_lints/src/fixes/wrap_in_try_catch.dart';
+import 'package:throwable_lints/src/throws_info_lost_in_assignment.dart';
 import 'package:throwable_lints/src/unhandled_exception_call.dart';
 import 'package:throwable_lints/src/unhandled_throw_in_body.dart';
 
@@ -41,6 +42,11 @@ class ThrowableLintsPlugin extends Plugin {
         AddThrowsAnnotation.new,
       )
       ..registerFixForRule(UnhandledExceptionCall.code, AddThrowsAnnotation.new)
-      ..registerFixForRule(UnhandledExceptionCall.code, WrapInTryCatch.new);
+      ..registerFixForRule(UnhandledExceptionCall.code, WrapInTryCatch.new)
+      ..registerLintRule(ThrowsInfoLostInAssignment())
+      ..registerFixForRule(
+        ThrowsInfoLostInAssignment.code,
+        AddThrowsAnnotation.new,
+      );
   }
 }

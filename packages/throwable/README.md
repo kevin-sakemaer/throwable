@@ -23,7 +23,7 @@ This annotation has no runtime behavior on its own. It is designed to work with 
 
 ```yaml
 dependencies:
-  throwable: ^1.0.0
+  throwable: ^1.0.0-alpha.2
 ```
 
 ## API

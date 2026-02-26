@@ -5,7 +5,13 @@ import 'package:analyzer/source/source_range.dart';
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dart';
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 
-import 'package:throwable_lints/src/utils/throws_utils.dart';
+import 'package:throwable_lints/src/utils/throws_utils.dart'
+    show
+        getEffectiveThrows,
+        getEnclosingExecutable,
+        getParameterThrowsForCall,
+        getVariableThrowsForCall,
+        resolveThrowingElements;
 
 /// A correction producer that wraps a statement in a try-catch block.
 ///
@@ -54,26 +60,42 @@ class WrapInTryCatch extends ResolvedCorrectionProducer {
     return [types.map((t) => t.getDisplayString()).join(', ')];
   }
 
-  /// Identifies all unhandled exception types that may be thrown by the
-  /// diagnostic node.
-  ///
-  /// Returns a list of [DartType] objects representing exception types that
-  /// are not currently handled or declared to be thrown.
+  /// Returns unhandled exception types from the diagnostic node.
   List<DartType> _resolveUnhandledExceptionTypes() {
     final diagnosticNode = node;
     if (diagnosticNode is! Expression) return const [];
 
-    final unhandled = <DartType>[];
-    final elements = resolveThrowingElements(diagnosticNode);
-    for (final element in elements) {
-      final effectiveTypes = getEffectiveThrows(element);
-      for (final exceptionType in effectiveTypes) {
-        if (!_isHandledOrDeclared(diagnosticNode, exceptionType)) {
-          unhandled.add(exceptionType);
-        }
+    return [
+      ..._unhandledFromElements(diagnosticNode),
+      ..._unhandledFromParameter(diagnosticNode),
+      ..._unhandledFromVariable(diagnosticNode),
+    ];
+  }
+
+  List<DartType> _unhandledFromElements(Expression node) {
+    final result = <DartType>[];
+    for (final element in resolveThrowingElements(node)) {
+      for (final type in getEffectiveThrows(element)) {
+        if (!_isHandledOrDeclared(node, type)) result.add(type);
       }
     }
-    return unhandled;
+    return result;
+  }
+
+  List<DartType> _unhandledFromParameter(Expression node) {
+    final result = <DartType>[];
+    for (final type in getParameterThrowsForCall(node)) {
+      if (!_isHandledOrDeclared(node, type)) result.add(type);
+    }
+    return result;
+  }
+
+  List<DartType> _unhandledFromVariable(Expression node) {
+    final result = <DartType>[];
+    for (final type in getVariableThrowsForCall(node)) {
+      if (!_isHandledOrDeclared(node, type)) result.add(type);
+    }
+    return result;
   }
 
   /// Checks if an exception type is already handled or declared.

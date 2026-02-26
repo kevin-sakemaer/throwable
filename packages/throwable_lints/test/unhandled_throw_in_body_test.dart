@@ -106,6 +106,39 @@ void f() {
     );
   }
 
+  Future<void> test_throwInLambdaDeclaredOnParameter() async {
+    await assertNoDiagnostics('''
+import 'package:throwable/throwable.dart';
+
+class MyException implements Exception {}
+
+void f(@Throws([MyException]) void Function() callback) {}
+
+void g() {
+  f(() {
+    throw MyException();
+  });
+}
+''');
+  }
+
+  Future<void> test_throwInLambdaNoAnnotationOnParameter() async {
+    await assertDiagnostics(
+      '''
+class MyException implements Exception {}
+
+void f(void Function() callback) {}
+
+void g() {
+  f(() {
+    throw MyException();
+  });
+}
+''',
+      [lint(104, 19)],
+    );
+  }
+
   Future<void> test_multipleThrowsSomeUnhandled() async {
     await assertDiagnostics(
       '''

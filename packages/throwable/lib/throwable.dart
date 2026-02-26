@@ -14,6 +14,9 @@ import 'package:meta/meta_meta.dart';
   TargetKind.getter,
   TargetKind.setter,
   TargetKind.constructor,
+  TargetKind.parameter,
+  TargetKind.field,
+  TargetKind.topLevelVariable,
 })
 class Throws {
   /// The types of exceptions or errors that can be thrown.

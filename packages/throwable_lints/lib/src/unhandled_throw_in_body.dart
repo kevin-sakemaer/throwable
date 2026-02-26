@@ -9,7 +9,11 @@ import 'package:analyzer/dart/element/type_system.dart';
 import 'package:analyzer/error/error.dart';
 
 import 'package:throwable_lints/src/utils/throws_utils.dart'
-    show IgnoreChecker, getDeclaredThrows, getEnclosingExecutable;
+    show
+        IgnoreChecker,
+        getDeclaredThrows,
+        getEnclosingExecutable,
+        getLambdaParameterThrows;
 
 /// Lint rule that enforces checked-exceptions for throw/rethrow expressions.
 class UnhandledThrowInBody extends MultiAnalysisRule {
@@ -109,6 +113,7 @@ class _Visitor extends SimpleAstVisitor<void> {
 
     if (_isHandledLocally(node, type, context.typeSystem)) return;
     if (_isDeclaredInAnnotation(node, type, context.typeSystem)) return;
+    if (_isDeclaredInLambdaParameter(node, type, context.typeSystem)) return;
 
     final typeName = type.getDisplayString();
     rule.reportAtNode(
@@ -202,6 +207,20 @@ class _Visitor extends SimpleAstVisitor<void> {
       if (current is FunctionBody) break;
       child = current;
       current = current.parent;
+    }
+    return false;
+  }
+
+  /// Checks if the throw is inside a lambda argument whose corresponding
+  /// parameter declares the exception via `@Throws`.
+  bool _isDeclaredInLambdaParameter(
+    AstNode node,
+    DartType thrownType,
+    TypeSystem typeSystem,
+  ) {
+    final declaredTypes = getLambdaParameterThrows(node);
+    for (final declaredType in declaredTypes) {
+      if (typeSystem.isSubtypeOf(thrownType, declaredType)) return true;
     }
     return false;
   }

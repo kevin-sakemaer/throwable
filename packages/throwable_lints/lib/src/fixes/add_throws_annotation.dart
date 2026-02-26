@@ -6,7 +6,16 @@ import 'package:analyzer_plugin/utilities/change_builder/change_builder_core.dar
 import 'package:analyzer_plugin/utilities/change_builder/change_builder_dart.dart';
 import 'package:analyzer_plugin/utilities/fixes/fixes.dart';
 
-import 'package:throwable_lints/src/utils/throws_utils.dart';
+import 'package:throwable_lints/src/utils/throws_utils.dart'
+    show
+        findEnclosingLambda,
+        getEffectiveThrows,
+        getEnclosingDeclaration,
+        getEnclosingExecutable,
+        getParameterThrowsForCall,
+        getThrowsFromExpression,
+        getVariableThrowsForCall,
+        resolveThrowingElements;
 
 /// A correction producer that adds or appends exception types to `@Throws`
 /// annotations.
@@ -74,16 +83,33 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     if (diagnosticNode is ThrowExpression) {
       return _resolveThrowExpressionType(diagnosticNode);
     }
-
     if (diagnosticNode is RethrowExpression) {
       return _resolveRethrowExpressionType(diagnosticNode);
     }
-
+    if (diagnosticNode is AssignmentExpression) {
+      return _resolveAssignmentExceptionType(diagnosticNode);
+    }
+    if (diagnosticNode is VariableDeclaration) {
+      return _resolveVariableDeclExceptionType(diagnosticNode);
+    }
     if (diagnosticNode is Expression) {
       return _resolveExpressionExceptionType(diagnosticNode);
     }
-
     return null;
+  }
+
+  /// Resolves exception type from an assignment's RHS throws info.
+  DartType? _resolveAssignmentExceptionType(AssignmentExpression node) {
+    final throws = getThrowsFromExpression(node.rightHandSide);
+    return throws.isNotEmpty ? throws[0] : null;
+  }
+
+  /// Resolves exception type from a variable declaration's initializer.
+  DartType? _resolveVariableDeclExceptionType(VariableDeclaration node) {
+    final initializer = node.initializer;
+    if (initializer == null) return null;
+    final throws = getThrowsFromExpression(initializer);
+    return throws.isNotEmpty ? throws[0] : null;
   }
 
   /// Resolves the exception type for a ThrowExpression.
@@ -119,14 +145,38 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
   ///
   /// Returns the first unhandled exception type or null.
   DartType? _resolveExpressionExceptionType(Expression expression) {
-    final elements = resolveThrowingElements(expression);
-    for (final element in elements) {
-      final effectiveTypes = getEffectiveThrows(element);
-      for (final exceptionType in effectiveTypes) {
-        if (!_isHandledOrDeclared(expression, exceptionType)) {
-          return exceptionType;
-        }
+    final fromElements = _firstUnhandledFromElements(expression);
+    if (fromElements != null) return fromElements;
+
+    final fromParams = _firstUnhandledFromThrows(
+      expression,
+      getParameterThrowsForCall(expression),
+    );
+    if (fromParams != null) return fromParams;
+
+    return _firstUnhandledFromThrows(
+      expression,
+      getVariableThrowsForCall(expression),
+    );
+  }
+
+  /// Returns the first unhandled exception type from resolved elements.
+  DartType? _firstUnhandledFromElements(Expression expression) {
+    for (final element in resolveThrowingElements(expression)) {
+      for (final type in getEffectiveThrows(element)) {
+        if (!_isHandledOrDeclared(expression, type)) return type;
       }
+    }
+    return null;
+  }
+
+  /// Returns the first unhandled type from a list of throws types.
+  DartType? _firstUnhandledFromThrows(
+    Expression expression,
+    List<DartType> throws,
+  ) {
+    for (final type in throws) {
+      if (!_isHandledOrDeclared(expression, type)) return type;
     }
     return null;
   }
@@ -225,11 +275,152 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     if (exceptionType == null) return;
 
     final exceptionName = exceptionType.getDisplayString();
-    final declaration = getEnclosingDeclaration(node);
-    if (declaration == null) return;
+    final target = _findAnnotationTarget(node);
+    if (target == null) return;
 
-    await _applyThrowsAnnotationEdit(builder, declaration, exceptionName);
+    await _applyThrowsAnnotationEdit(builder, target, exceptionName);
   }
+
+  /// Finds the AST node where `@Throws` should be added.
+  ///
+  /// If the node is inside a lambda that is passed as an argument to a
+  /// function call, targets the corresponding parameter declaration.
+  /// Otherwise falls back to the enclosing named declaration.
+  AstNode? _findAnnotationTarget(AstNode node) {
+    if (node is VariableDeclaration) {
+      return _findVariableDeclTarget(node);
+    }
+    if (node is AssignmentExpression) {
+      return _findAssignmentTarget(node);
+    }
+    final lambda = findEnclosingLambda(node);
+    if (lambda != null) {
+      final param = _findParameterNode(lambda);
+      if (param != null) return param;
+    }
+    return getEnclosingDeclaration(node);
+  }
+
+  /// Walks up from a [VariableDeclaration] to its enclosing declaration.
+  AstNode? _findVariableDeclTarget(VariableDeclaration node) {
+    final parent = node.parent?.parent;
+    if (parent is TopLevelVariableDeclaration || parent is FieldDeclaration) {
+      return parent;
+    }
+    return null;
+  }
+
+  /// Finds the LHS variable's declaration for an assignment expression.
+  AstNode? _findAssignmentTarget(AssignmentExpression node) {
+    final writeElement = node.writeElement;
+    if (writeElement is! PropertyAccessorElement) return null;
+    return _findDeclarationByOffset(
+      writeElement.variable.firstFragment.offset,
+    );
+  }
+
+  /// Finds the [FormalParameter] AST node that a lambda expression
+  /// corresponds to as an argument.
+  ///
+  /// Resolves the called function, finds its declaration in the
+  /// compilation unit, and matches the parameter by name.
+  FormalParameter? _findParameterNode(FunctionExpression lambda) {
+    final param = _getLambdaParameter(lambda);
+    if (param == null) return null;
+
+    final paramName = param.name;
+    if (paramName == null) return null;
+
+    final call = _getFunctionCall(lambda);
+    if (call == null) return null;
+
+    final calledElement = _resolveCalledElement(call);
+    if (calledElement == null) return null;
+
+    final funcDecl = _findDeclarationByOffset(
+      calledElement.firstFragment.offset,
+    );
+    if (funcDecl == null) return null;
+
+    final paramList = _getParameterList(funcDecl);
+    if (paramList == null) return null;
+
+    return _findParameterByName(paramList, paramName);
+  }
+
+  /// Gets the corresponding parameter from a lambda expression.
+  FormalParameterElement? _getLambdaParameter(FunctionExpression lambda) =>
+      lambda.correspondingParameter;
+
+  /// Gets the function call that contains the lambda.
+  AstNode? _getFunctionCall(FunctionExpression lambda) {
+    final argList = lambda.parent;
+    if (argList is! ArgumentList) return null;
+    return argList.parent;
+  }
+
+  /// Resolves the called element from a function call.
+  ExecutableElement? _resolveCalledElement(AstNode call) {
+    if (call is MethodInvocation) {
+      final e = call.methodName.element;
+      return e is ExecutableElement ? e : null;
+    } else if (call is FunctionExpressionInvocation) {
+      return call.element;
+    }
+    return null;
+  }
+
+  /// Finds a parameter in a parameter list by name.
+  FormalParameter? _findParameterByName(
+    FormalParameterList paramList,
+    String paramName,
+  ) {
+    for (final p in paramList.parameters) {
+      if (p.name?.lexeme == paramName) return p;
+    }
+    return null;
+  }
+
+  /// Finds a declaration AST node at the given name [offset].
+  AstNode? _findDeclarationByOffset(int offset) {
+    for (final decl in unitResult.unit.declarations) {
+      if (decl is FunctionDeclaration && decl.name.offset == offset) {
+        return decl;
+      }
+      if (decl is TopLevelVariableDeclaration) {
+        for (final v in decl.variables.variables) {
+          if (v.name.offset == offset) return decl;
+        }
+      }
+      if (decl is ClassDeclaration) {
+        final member = _findClassMemberByOffset(decl, offset);
+        if (member != null) return member;
+      }
+    }
+    return null;
+  }
+
+  /// Searches class members for a declaration at the given [offset].
+  AstNode? _findClassMemberByOffset(ClassDeclaration cls, int offset) {
+    for (final member in (cls.body as BlockClassBody).members) {
+      if (member is MethodDeclaration && member.name.offset == offset) {
+        return member;
+      }
+      if (member is FieldDeclaration) {
+        for (final v in member.fields.variables) {
+          if (v.name.offset == offset) return member;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Extracts the [FormalParameterList] from a declaration.
+  FormalParameterList? _getParameterList(AstNode decl) => switch (decl) {
+    FunctionDeclaration() => decl.functionExpression.parameters,
+    MethodDeclaration() => decl.parameters,
+    _ => null,
+  };
 
   /// Applies the necessary edits to add or update a `@Throws` annotation.
   ///
@@ -293,6 +484,9 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
         FunctionDeclaration() => declaration.metadata,
         MethodDeclaration() => declaration.metadata,
         ConstructorDeclaration() => declaration.metadata,
+        FormalParameter() => declaration.metadata,
+        TopLevelVariableDeclaration() => declaration.metadata,
+        FieldDeclaration() => declaration.metadata,
         _ => null,
       };
 
@@ -408,15 +602,9 @@ class AddThrowsAnnotation extends ResolvedCorrectionProducer {
     AstNode declaration,
     String exceptionName,
   ) {
-    // Determine the indentation of the declaration
-    final lineInfo = unitResult.lineInfo;
-    final declarationLine = lineInfo.getLocation(declaration.offset).lineNumber;
-    final lineStart = lineInfo.getOffsetOfLine(declarationLine - 1);
-    final indent = ' ' * (declaration.offset - lineStart);
-
     builder.addSimpleInsertion(
       declaration.offset,
-      '@Throws([$exceptionName])\n$indent',
+      '@Throws([$exceptionName]) ',
     );
   }
 }

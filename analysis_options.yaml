@@ -4,6 +4,7 @@ plugins:
     diagnostics:
       unhandled_exception_call: error
       unhandled_throw_in_body: error
+      throws_info_lost_in_assignment: error
   avoid_long_functions:
     path: ../avoid_long_functions
     diagnostics:
